@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Homer Icons</title>
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<style>
+body { font-family: sans-serif; margin: 2rem; background: #111; color: #eee; }
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  max-width: 720px;
+}
+.controls #search {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: .8rem 1rem;
+  border-radius: 10px;
+  border: 0;
+}
+.controls label { font-size: 0.9rem; color: #ccc; }
+.controls select {
+  padding: .55rem 0.75rem;
+  border-radius: 10px;
+  border: 0;
+  font: inherit;
+  min-width: 7rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: #1d1d1d;
+  padding: 0.75rem;
+  border-radius: 10px;
+  min-width: 0;
+}
+.icon button.copy {
+  margin: 0;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #eee;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}
+.icon button.copy img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+}
+.icon-label {
+  font-size: 0.7rem;
+  line-height: 1.25;
+  word-break: break-word;
+  max-width: 100%;
+}
+.hidden { display:none; }
+.version {
+  margin: -0.5rem 0 1rem;
+  color: #9aa0a6;
+  font-size: 0.9rem;
+}
+.meta {
+  margin: 0 0 1rem;
+  color: #b8bec5;
+  font-size: 0.9rem;
+}
+.meta a { color: #8ab4f8; }
+.loading {
+  margin: 0;
+  color: #b8bec5;
+  font-size: 1rem;
+}
+.page-hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Homer Icons</h1>
+<p class="loading" id="loadingState">loading...</p>
+<div id="pageContent" class="page-hidden">
+<p class="meta">
+  Project: <a href="https://github.com/JacobusXIII/homer-icons-container/" target="_blank" rel="noopener noreferrer">JacobusXIII/homer-icons-container</a> @ <code id="containerVersion">loading...</code><br>
+  Icons: <a href="https://github.com/NX211/homer-icons" target="_blank" rel="noopener noreferrer">NX211/homer-icons</a> @ <code id="upstreamVersion">loading...</code>
+</p>
+
+<div class="controls">
+  <input id="search" type="search" list="suggestions" placeholder="Search icons...">
+  <label for="typeFilter">Type</label>
+  <select id="typeFilter" aria-label="Filter by image type">
+    <option value="all" selected>All</option>
+    <option value="png">PNG</option>
+    <option value="svg">SVG</option>
+  </select>
+</div>
+<datalist id="suggestions"></datalist>
+
+<div class="grid" id="grid"></div>
+</div>
+
+<script>
+const search = document.getElementById('search');
+const typeFilter = document.getElementById('typeFilter');
+const suggestions = document.getElementById('suggestions');
+const grid = document.getElementById('grid');
+const loadingState = document.getElementById('loadingState');
+const pageContent = document.getElementById('pageContent');
+let icons = [];
+let baseUrl = '';
+
+function appBaseUrl() {
+  let path = location.pathname;
+  if (!path.endsWith('/')) {
+    const last = path.split('/').pop() || '';
+    if (/\.[a-z0-9]+$/i.test(last)) {
+      path = path.replace(/\/[^/]*$/, '/') || '/';
+    } else {
+      path += '/';
+    }
+  }
+  return location.origin + path;
+}
+
+function manifestUrl() {
+  return new URL('cgi-bin/gallery-manifest', appBaseUrl()).href;
+}
+
+function buildIconEl(file) {
+  const nameWithExt = file.split('/').pop();
+  const clean = nameWithExt.replace(/\.[^.]+$/, '');
+  const typ = file.startsWith('svg/') ? 'svg' : 'png';
+  const div = document.createElement('div');
+  div.className = 'icon';
+  div.dataset.name = clean;
+  div.dataset.file = file;
+  div.dataset.type = typ;
+  div.innerHTML = '<button type="button" class="copy" data-file="' + file + '"><img src="' + file + '" alt="" width="64" height="64" decoding="async"><span class="icon-label">' + nameWithExt + '</span></button>';
+  return div;
+}
+
+function resolvedBaseUrl() {
+  if (!baseUrl) {
+    return appBaseUrl();
+  }
+  if (baseUrl === '/') return location.origin + '/';
+  if (/^https?:\/\//i.test(baseUrl)) return baseUrl;
+  return new URL(baseUrl, location.origin + '/').href;
+}
+
+function applyFilters() {
+  const q = search.value.trim().toLowerCase();
+  const t = typeFilter.value;
+
+  const iconEls = [...document.querySelectorAll('.icon')];
+  iconEls.forEach(icon => {
+    const name = icon.dataset.name.toLowerCase();
+    const file = icon.dataset.file.toLowerCase();
+    const typeOk = t === 'all' || icon.dataset.type === t;
+    const searchOk = !q || name.includes(q) || file.includes(q);
+    icon.classList.toggle('hidden', !typeOk || !searchOk);
+  });
+
+  const pool = iconEls.filter(i => t === 'all' || i.dataset.type === t);
+  const suggestNames = [...new Set(pool.map(i => i.dataset.name))]
+    .filter(n => !q || n.toLowerCase().includes(q))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    .slice(0, 20);
+
+  suggestions.innerHTML = '';
+  suggestNames.forEach(n => {
+    const o = document.createElement('option');
+    o.value = n;
+    suggestions.appendChild(o);
+  });
+}
+
+function wireCopyButtons() {
+  document.querySelectorAll('.copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const url = new URL(btn.dataset.file, resolvedBaseUrl()).href;
+      const label = btn.querySelector('.icon-label');
+      await navigator.clipboard.writeText(url);
+      const prev = label.textContent;
+      label.textContent = 'Copied!';
+      setTimeout(() => { label.textContent = prev; }, 1000);
+    });
+  });
+}
+
+async function init() {
+  try {
+    const resp = await fetch(manifestUrl(), { cache: 'no-store' });
+    const data = await resp.json();
+    icons = data.icons || [];
+    baseUrl = data.base_url || '';
+
+    document.getElementById('containerVersion').textContent = data.container_version || 'unknown';
+    document.getElementById('upstreamVersion').textContent = data.upstream_git_version || 'unknown';
+
+    const frag = document.createDocumentFragment();
+    icons.forEach(file => frag.appendChild(buildIconEl(file)));
+    grid.appendChild(frag);
+
+    wireCopyButtons();
+    applyFilters();
+    pageContent.classList.remove('page-hidden');
+    loadingState.classList.add('page-hidden');
+  } catch (_) {
+    loadingState.textContent = 'failed to load icons';
+  }
+}
+
+search.addEventListener('input', applyFilters);
+typeFilter.addEventListener('change', applyFilters);
+init();
+</script>
+
+</body>
+</html>
